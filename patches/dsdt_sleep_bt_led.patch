@@ -1,0 +1,44 @@
+--- a/DSDT.dsl
++++ b/DSDT.dsl
+@@ -1007,6 +1007,18 @@
+     Method (_PTS, 1, NotSerialized)  // _PTS: Prepare To Sleep
+     {
+         SPTS (Arg0)
++        If ((((Arg0 == 0x03) || (Arg0 == 0x04)) || (Arg0 == One)))
++        {
++            If (CondRefOf (\_SB.PCI0.LPC0.EC0.LFCM))
++            {
++                Local0 = Acquire (\_SB.PCI0.LPC0.EC0.LFCM, 0x0FA0)
++                If ((Local0 == Zero))
++                {
++                    \_SB.PCI0.LPC0.EC0.PCBS = 0x02
++                    Release (\_SB.PCI0.LPC0.EC0.LFCM)
++                }
++            }
++        }
+         M460 ("PLA-ASL-\\_PTS Start Arg0 = 0x%X\n", ToInteger (Arg0), Zero, Zero, Zero, Zero, Zero)
+@@ -1074,6 +1086,15 @@
+     Method (_WAK, 1, NotSerialized)  // _WAK: Wake
+     {
+         M460 ("PLA-ASL-\\_WAK Start Arg0 = 0x%X\n", ToInteger (Arg0), Zero, Zero, Zero, Zero, Zero)
++        If (CondRefOf (\_SB.PCI0.LPC0.EC0.LFCM))
++        {
++            Local0 = Acquire (\_SB.PCI0.LPC0.EC0.LFCM, 0x0FA0)
++            If ((Local0 == Zero))
++            {
++                \_SB.PCI0.LPC0.EC0.PCBS = Zero
++                Release (\_SB.PCI0.LPC0.EC0.LFCM)
++            }
++        }
+         M460 ("PLA-ASL-\\_WAK call SWAK\n", Zero, Zero, Zero, Zero, Zero, Zero)
+@@ -4571,6 +4592,10 @@
+                             Name (_PRR, Package (0x01)  // _PRR: Power Resource for Reset
+                             {
+                                 BTPR
+                             })
++                            Name (_PRW, Package (0x02)  // _PRW: Power Resources for Wake
++                            {
++                                Zero, 
++                                Zero
++                            })
+                         }
