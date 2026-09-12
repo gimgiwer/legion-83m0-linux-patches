@@ -5,8 +5,11 @@
                 case "$3" in
                     000000e3)
                         # Fn+Q hardware hotkey on Lenovo Legion
-                        logger "Fn+Q pressed: cycling power profile"
                         (
+                            flock -n 9 || exit 0
+
+                            logger "Fn+Q pressed: cycling power profile"
+
                             # Dynamically locate active seat0 user and Wayland display
                             target_user=$(loginctl list-sessions --no-legend 2>/dev/null | awk '$3 != "" {print $3}' | head -n1)
                             target_uid=$(id -u "$target_user" 2>/dev/null || echo 1000)
@@ -31,7 +34,10 @@
                                     *)           powerprofilesctl set balanced ;;
                                 esac
                             fi
-                        ) &
+
+                            # Debounce cooldown window to prevent rapid event spamming and scheduler thrashing
+                            sleep 0.6
+                        ) 9>/run/fn_q.lock &
                         ;;
                 esac
                 ;;
