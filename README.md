@@ -44,9 +44,13 @@ DSDT patches, kernel module configs, and ACPI handlers for Lenovo Legion 5 15AHP
 
 ### 4. Performance Profile Switch Hotkey (Fn+Q)
 - **Hardware Event:** Emits ACPI WMI event on `PNP0C14:02` with scancode `000000e3`.
-- **Fix:** Hook into `/etc/acpi/handler.sh` to cycle `powerprofilesctl` and dispatch OSD notifications (dynamically detects active seat0 Wayland session). See [`acpi/handler_wmi_fn_q.sh`](acpi/handler_wmi_fn_q.sh).
+- **Fix:** Hook into `/etc/acpi/handler.sh` to cycle `powerprofilesctl` and dispatch OSD notifications (dynamically detects active seat0 Wayland session with non-blocking `flock` debounce). See [`acpi/handler_wmi.sh`](acpi/handler_wmi.sh).
 
-### 5. Copilot Key Remap
+### 5. Screen Refresh Rate Toggle Hotkey (Fn+R)
+- **Hardware Event:** Emits ACPI WMI event on `PNP0C14:02` with scancode `000000e8` (EC query `_QDF`/`_QDE`).
+- **Fix:** Hook into `/etc/acpi/handler.sh` to seamlessly toggle internal panel mode between 60Hz and maximum supported refresh rate (180Hz) via compositor CLI (`niri msg output <eDP> mode ...`) with atomic debounce on `/run/fn_r.lock`.
+
+### 6. Copilot Key Remap
 - **Hardware Event:** Physical Copilot key sends `KEY_LEFTMETA + KEY_LEFTSHIFT + KEY_F23` via `ITE Device 8258` (`/dev/input/event5`).
 - **Fix:** Bind `Mod+Shift+F23` in your Wayland compositor (Niri, Hyprland, Sway) to whatever action you need.
 
