@@ -1,19 +1,19 @@
 # Lenovo Legion 83M0: Linux DSDT & Hardware Fixes
 
-DSDT patches, kernel module configs, and ACPI handlers for Lenovo Legion 5 15AHP9 / 16AHP9 / R7000 (2024–2026). Validated against BIOS `RGCN35WW` and EC `RGEC35WW`.
+DSDT patches, kernel module configs, and ACPI handlers for Lenovo Legion 5 15AHP9 / 16AHP9 / R7000 (2024–2026). Validated against BIOS `RGCN36WW` and EC `RGEC36WW` (backwards-compatible with `RGCN35WW`).
 
 ---
 
 ## Target Hardware
 
-| Component | Specification | Notes |
+| Component | Specification | Details |
 | :--- | :--- | :--- |
 | **Laptop Model** | Lenovo Legion R7000 AHP10 (Type `83M0`) | Global equivalents: Legion 5 15AHP9 / 16AHP9 (Board `LNVNB161216`) |
 | **CPU** | AMD Ryzen 7 H 255 (8C/16T, Hawk Point Zen 4) | Family 25, Model 117, Stepping 2 |
 | **iGPU** | AMD Radeon 780M Graphics | RDNA 3, PCI ID `1002:1900` |
 | **dGPU** | NVIDIA GeForce RTX 5060 Laptop GPU | Blackwell GB206M, PCI ID `10de:2d59` |
 | **EC** | ITE Embedded Controller (IT8258) | ACPI Path: `\_SB.PCI0.LPC0.EC0` |
-| **Firmware** | BIOS `RGCN35WW` / EC `RGEC35WW` | Tested baseline |
+| **Firmware** | BIOS `RGCN36WW` / EC `RGEC36WW` | Current verified baseline (also supports `RGCN35WW`) |
 
 ---
 
@@ -23,15 +23,17 @@ DSDT patches, kernel module configs, and ACPI handlers for Lenovo Legion 5 15AHP
 - **Symptom:** System exits `s2idle` after ~0.98s. Sleep is non-functional.
 - **Root Cause:** Internal Intel AX210 Bluetooth module at USB port `\_SB.PCI0.GP17.XHC0.RHUB.PRT5` spuriously asserts `GPE03` wake notifications during suspend.
 - **Fix:** Override `_PRW` on `PRT5` to `Package(2) { Zero, Zero }`. Disables wake triggers; Bluetooth remains fully operational in S0.
-- **Patch:** [`patches/dsdt_sleep_bt_led.patch`](patches/dsdt_sleep_bt_led.patch) (or insert manually from [`patches/snippets.asl`](patches/snippets.asl)).
+- **Patches:**
+  - For BIOS `RGCN36WW`: [`patches/dsdt_rgcn36_sleep_bt.patch`](patches/dsdt_rgcn36_sleep_bt.patch)
+  - For BIOS `RGCN35WW`: [`patches/dsdt_sleep_bt_led.patch`](patches/dsdt_sleep_bt_led.patch) (or insert manually from [`patches/snippets.asl`](patches/snippets.asl)).
 
 ### 2. Autonomous Power Button Breathing LED
 - **Symptom:** Power button LED remains solid or unlit in `s2idle`.
-- **Root Cause:** Stock DSDT does not trigger the hardware breathing PWM on the power button LED in Linux during sleep.
-- **Fix:** Hook into ACPI sleep methods:
+- **Status in EC `RGEC36WW` (BIOS `RGCN36WW`):** Resolved by Lenovo in hardware. The EC microcode autonomously drives breathing PWM on Modern Standby `lps0 entry`. No DSDT patching required.
+- **Legacy Fix for `RGCN35WW`:** Hook into ACPI sleep methods:
   - **`_PTS` (Prepare To Sleep):** Acquire EC mutex `LFCM` (timeout `0x0FA0`), write `0x02` to EC register `PCBS` (ECRAM offset `0x42`).
   - **`_WAK` (Wake):** Write `0x00` to `PCBS` to restore active profile coloring.
-- **Patch:** Included in [`patches/dsdt_sleep_bt_led.patch`](patches/dsdt_sleep_bt_led.patch).
+  - See [`patches/dsdt_sleep_bt_led.patch`](patches/dsdt_sleep_bt_led.patch).
 
 ### 3. Screen Backlight (Tianma 2.5K 180Hz DC-Dimming)
 - **Symptom:** Software brightness slider moves, but physical panel backlight does not respond.
@@ -44,11 +46,12 @@ DSDT patches, kernel module configs, and ACPI handlers for Lenovo Legion 5 15AHP
 
 ### 4. Performance Profile Switch Hotkey (Fn+Q)
 - **Hardware Event:** Emits ACPI WMI event on `PNP0C14:02` with scancode `000000e3`.
-- **Fix:** Hook into `/etc/acpi/handler.sh` to cycle `powerprofilesctl` and dispatch OSD notifications (dynamically detects active seat0 Wayland session with non-blocking `flock` debounce). See [`acpi/handler_wmi.sh`](acpi/handler_wmi.sh).
+- **Fix:** Hook into `/etc/acpi/handler.sh` to cycle `powerprofilesctl` and dispatch OSD notifications. Uses non-blocking `flock` debounce, deterministic `loginctl list-sessions --json=short` active seat0 lookup, and typed Wayland socket detection. See [`acpi/handler_wmi.sh`](acpi/handler_wmi.sh).
 
 ### 5. Screen Refresh Rate Toggle Hotkey (Fn+R)
-- **Hardware Event:** Emits ACPI WMI event on `PNP0C14:02` with scancode `000000e8` (EC query `_QDF`/`_QDE`).
-- **Fix:** Hook into `/etc/acpi/handler.sh` to seamlessly toggle internal panel mode between 60Hz and maximum supported refresh rate (180Hz) via compositor CLI (`niri msg output <eDP> mode ...`) with atomic debounce on `/run/fn_r.lock`.
+- **Hardware Event:** Emits standard evdev / XKB symbol `XF86RefreshRateToggle`.
+- **Fix:** Bind directly in your Wayland compositor (e.g. `XF86RefreshRateToggle` in Niri) to toggle internal panel mode between 60Hz and maximum supported refresh rate (180Hz) silently via compositor CLI (`niri msg output <eDP> mode ...`).
+- **Note on ACPI `000000e8`:** ACPI WMI event `000000e8` (`_QDF`/`LSKV`) is exclusively the physical camera privacy e-Shutter switch, not Fn+R.
 
 ### 6. Copilot Key Remap
 - **Hardware Event:** Physical Copilot key sends `KEY_LEFTMETA + KEY_LEFTSHIFT + KEY_F23` via `ITE Device 8258` (`/dev/input/event5`).
