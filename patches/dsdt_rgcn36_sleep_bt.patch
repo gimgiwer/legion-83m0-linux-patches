@@ -1,0 +1,14 @@
+--- /tmp/dsdt_rgcn36.dsl	2026-09-15 20:18:20.915707016 +0300
++++ /tmp/dsdt_patched.dsl	2026-09-15 20:47:56.477676039 +0300
+@@ -4548,6 +4548,11 @@
+                             {
+                                 BTPR
+                             })
++                            Name (_PRW, Package (0x02)  // _PRW: Power Resources for Wake
++                            {
++                                Zero, 
++                                Zero
++                            })
+                         }
+ 
+                         Device (PRT6)
