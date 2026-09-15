@@ -10,13 +10,13 @@
 
                             logger "Fn+Q pressed: cycling power profile"
 
-                            # Dynamically locate active seat0 user and Wayland display
-                            target_user=$(loginctl list-sessions --no-legend 2>/dev/null | awk '$3 != "" {print $3}' | head -n1)
-                            target_uid=$(id -u "$target_user" 2>/dev/null || echo 1000)
+                            # Deterministic active seat0 user session lookup via loginctl JSON
+                            read -r target_user target_uid < <(loginctl list-sessions --json=short 2>/dev/null | jq -r '.[] | select(.class == "user" and .seat == "seat0") | "\(.user) \(.uid)"' | head -n1)
                             notified=false
 
-                            if [ -n "$target_user" ] && [ -d "/run/user/${target_uid}" ]; then
-                                wayland_sock=$(find "/run/user/${target_uid}" -maxdepth 1 -name "wayland-*" -printf "%f\n" 2>/dev/null | head -n1)
+                            # Trigger Noctalia OSD and profile switch inside active Wayland session
+                            if [ -n "$target_user" ] && [ -n "$target_uid" ] && [ -d "/run/user/${target_uid}" ]; then
+                                wayland_sock=$(find "/run/user/${target_uid}" -maxdepth 1 -type s -name "wayland-*" -printf "%f\n" 2>/dev/null | head -n1)
                                 if [ -n "$wayland_sock" ]; then
                                     if runuser -u "$target_user" -- env XDG_RUNTIME_DIR="/run/user/${target_uid}" WAYLAND_DISPLAY="$wayland_sock" noctalia msg power-cycle >/dev/null 2>&1; then
                                         notified=true
@@ -40,43 +40,8 @@
                         ) 9>/run/fn_q.lock &
                         ;;
                     000000e8)
-                        # Fn+R hardware hotkey on Lenovo Legion (Display Refresh Rate Toggle, silent)
-                        (
-                            flock -n 8 || exit 0
-
-                            logger "Fn+R pressed: toggling display refresh rate"
-
-                            target_user=$(loginctl list-sessions --no-legend 2>/dev/null | awk '$3 != "" {print $3}' | head -n1)
-                            target_uid=$(id -u "$target_user" 2>/dev/null || echo 1000)
-
-                            if [ -n "$target_user" ] && [ -d "/run/user/${target_uid}" ]; then
-                                wayland_sock=$(find "/run/user/${target_uid}" -maxdepth 1 -name "wayland-*" -printf "%f\n" 2>/dev/null | head -n1)
-                                niri_sock=$(ls "/run/user/${target_uid}"/niri.*.sock 2>/dev/null | head -n1)
-                                if [ -n "$wayland_sock" ]; then
-                                    runuser -u "$target_user" -- env XDG_RUNTIME_DIR="/run/user/${target_uid}" WAYLAND_DISPLAY="$wayland_sock" NIRI_SOCKET="$niri_sock" bash -c '
-                                        edp_json=$(niri msg -j outputs 2>/dev/null | jq -r ".[] | select(.name | startswith(\"eDP\"))")
-                                        [ -z "$edp_json" ] && exit 0
-                                        edp_name=$(echo "$edp_json" | jq -r ".name")
-                                        curr_mode_idx=$(echo "$edp_json" | jq -r ".current_mode")
-                                        curr_rate=$(echo "$edp_json" | jq -r ".modes[$curr_mode_idx].refresh_rate")
-                                        w=$(echo "$edp_json" | jq -r ".modes[$curr_mode_idx].width")
-                                        h=$(echo "$edp_json" | jq -r ".modes[$curr_mode_idx].height")
-
-                                        max_rate=$(echo "$edp_json" | jq -r "[.modes[] | select(.width == $w and .height == $h)] | map(.refresh_rate) | max")
-                                        max_hz=$((max_rate / 1000))
-
-                                        if [ "$curr_rate" -ge 120000 ]; then
-                                            niri msg output "$edp_name" mode "${w}x${h}@60.000"
-                                        else
-                                            niri msg output "$edp_name" mode "${w}x${h}@${max_hz}.000"
-                                        fi
-                                    ' >/dev/null 2>&1
-                                fi
-                            fi
-
-                            # Debounce cooldown window
-                            sleep 0.6
-                        ) 8>/run/fn_r.lock &
+                        # Lenovo Camera Privacy e-Shutter switch
+                        logger "Camera privacy shutter toggled: $3"
                         ;;
                     *)
                         logger "ACPI WMI PNP0C14:02 event: $3"
